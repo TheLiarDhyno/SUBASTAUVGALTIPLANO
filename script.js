@@ -443,15 +443,6 @@ const productos = [
     categoria: 'laptops'
   },
   {
-    id: 'L11',
-    nombre: 'Laptop DELL Inspiron 5567',
-    descripcion: 'Buen estado, 8GB RAM, HDD 500GB',
-    precio: 1400,
-    specs: ['Windows 11', 'HDD 500GB', 'Intel i7 7200U'],
-    img: 'imagenes/Laptops/L11.png',
-    categoria: 'laptops'
-  },
-  {
     id: 'L12',
     nombre: 'Laptop DELL Latitude 5567',
     descripcion: 'Buen estado, 12GB RAM, SSD 480GB',
