@@ -798,19 +798,18 @@ function filtrarProductos(categoria) {
 }
 
 // 🔥 FUNCIÓN MEJORADA PARA CARGAR PRODUCTOS CON CONTROL DE CANCELACIÓN
+// 🔥 FUNCIÓN MEJORADA PARA CARGAR PRODUCTOS CON SINCRONIZACIÓN
 async function cargarProductosConEstado() {
   const grid = document.getElementById('productsGrid');
   if (!grid) return;
   
-  // 🔒 BLOQUEAR NUEVAS CARGAS MIENTRAS UNA ESTÁ EN PROGRESO
   if (cargaEnProgreso) {
-    console.log(' Carga en progreso, ignorando solicitud...');
+    console.log('⏳ Carga en progreso, ignorando solicitud...');
     return;
   }
   
-  // 🆔 IDENTIFICADOR ÚNICO PARA ESTA CARGA
   const cargaId = ++ultimaCargaId;
-  console.log(` Iniciando carga #${cargaId} para categoría: ${categoriaActual}`);
+  console.log(`🚀 Iniciando carga #${cargaId} para categoría: ${categoriaActual}`);
   
   cargaEnProgreso = true;
   
@@ -825,14 +824,10 @@ async function cargarProductosConEstado() {
     
     const productosAMostrar = categoriaActual === 'all' ? productos : productosFiltrados;
     
-    console.log(` Productos a mostrar: ${productosAMostrar.length}`);
+    console.log(`📦 Productos a mostrar: ${productosAMostrar.length}`);
     
     if (productosAMostrar.length === 0) {
-      // VERIFICAR SI ESTA CARGA SIGUE SIENDO VÁLIDA
-      if (cargaId !== ultimaCargaId) {
-        console.log('Carga cancelada - obsoleta');
-        return;
-      }
+      if (cargaId !== ultimaCargaId) return;
       
       grid.innerHTML = `
         <div class="no-products">
@@ -844,62 +839,59 @@ async function cargarProductosConEstado() {
       return;
     }
     
-    // 🔥 CARGAR TODOS LOS ESTADOS PRIMERO (MÁS EFICIENTE)
+    // 🔥 SINCRONIZAR LOCALSTORAGE CON FIREBASE PRIMERO
+    await sincronizarLocalStorageConFirebase();
+    
+    // 🔥 CARGAR ESTADOS DESDE FIREBASE (fuente de verdad)
     const estadosProductos = await cargarEstadosProductos(productosAMostrar);
     
-    // VERIFICAR SI ESTA CARGA SIGUE SIENDO VÁLIDA
     if (cargaId !== ultimaCargaId) {
-      console.log(' Carga cancelada - obsoleta');
+      console.log('❌ Carga cancelada - obsoleta');
       return;
     }
     
-    // DENTRO DE cargarProductosConEstado(), ACTUALIZA ESTA PARTE:
-const productosHTML = productosAMostrar.map((p, index) => {
-  const estado = estadosProductos[index];
-  const reservado = estado === 'reservado';
-  const vendido = estado === 'vendido';
-  
-  let estadoTexto = 'Disponible';
-  let estadoClase = 'available';
-  
-  if (vendido) {
-    estadoTexto = 'Vendido';
-    estadoClase = 'sold';
-  } else if (reservado) {
-    estadoTexto = 'Reservado';
-    estadoClase = 'solicited';
-  }
-  
-  return `
-    <div class="card">
-      <div class="img" style="background:url('${p.img}') center/cover; height:160px; border-radius:8px;"></div>
-      <div class="card-header">
-        <h3>${p.nombre}</h3>
-      </div>
-      <p>${p.descripcion}</p>
-      <div class="price">Q${p.precio.toFixed(2)}</div>
-      <div class="status ${estadoClase}">
-        ${estadoTexto}
-      </div>
-      <button class="btn request" data-id="${p.id}" ${reservado || vendido ? 'disabled style="opacity:0.5"' : ''}>
-        ${vendido ? 'Producto vendido' : (reservado ? 'Ya reservado' : 'Solicitar este equipo')}
-      </button>
-    </div>
-  `;
-}).join('');
+    const productosHTML = productosAMostrar.map((p, index) => {
+      const estado = estadosProductos[index];
+      const reservado = estado === 'reservado';
+      const vendido = estado === 'vendido';
+      
+      let estadoTexto = 'Disponible';
+      let estadoClase = 'available';
+      
+      if (vendido) {
+        estadoTexto = 'Vendido';
+        estadoClase = 'sold';
+      } else if (reservado) {
+        estadoTexto = 'Reservado';
+        estadoClase = 'solicited';
+      }
+      
+      return `
+        <div class="card">
+          <div class="img" style="background:url('${p.img}') center/cover; height:160px; border-radius:8px;"></div>
+          <div class="card-header">
+            <h3>${p.nombre}</h3>
+          </div>
+          <p>${p.descripcion}</p>
+          <div class="price">Q${p.precio.toFixed(2)}</div>
+          <div class="status ${estadoClase}">
+            ${estadoTexto}
+          </div>
+          <button class="btn request" data-id="${p.id}" ${reservado || vendido ? 'disabled style="opacity:0.5"' : ''}>
+            ${vendido ? 'Producto vendido' : (reservado ? 'Ya reservado' : 'Solicitar este equipo')}
+          </button>
+        </div>
+      `;
+    }).join('');
     
-    // VERIFICAR UNA ÚLTIMA VEZ ANTES DE ACTUALIZAR EL DOM
     if (cargaId === ultimaCargaId) {
       grid.innerHTML = productosHTML;
-      console.log(` Carga #${cargaId} completada - ${productosAMostrar.length} productos`);
-    } else {
-      console.log(' Carga cancelada - última verificación');
+      console.log(`✅ Carga #${cargaId} completada - ${productosAMostrar.length} productos`);
     }
     
   } catch (error) {
-    console.error(` Error en carga #${cargaId}:`, error);
+    console.error(`❌ Error en carga #${cargaId}:`, error);
     
-    // SOLO MOSTRAR ERROR SI ESTA ES LA CARGA ACTUAL
     if (cargaId === ultimaCargaId) {
       grid.innerHTML = `
         <div class="error-products">
@@ -910,13 +902,56 @@ const productosHTML = productosAMostrar.map((p, index) => {
       `;
     }
   } finally {
-    // 🔓 LIBERAR BLOQUEO SOLO SI ESTA ES LA CARGA ACTUAL
     if (cargaId === ultimaCargaId) {
       cargaEnProgreso = false;
     }
   }
 }
-
+// 🔥 NUEVA FUNCIÓN: SINCRONIZAR LOCALSTORAGE CON FIREBASE
+async function sincronizarLocalStorageConFirebase() {
+  try {
+    console.log('🔄 Sincronizando localStorage con Firebase...');
+    
+    // Obtener todos los productos reservados en Firebase
+    const snapshot = await db.collection("reservas")
+      .where("estado", "in", ["reservado", "vendido"])
+      .get();
+    
+    // Crear Set de productos reservados/vendidos en Firebase
+    const productosFirebase = new Set();
+    snapshot.forEach(doc => {
+      const reserva = doc.data();
+      if (reserva.idProducto) {
+        productosFirebase.add(reserva.idProducto);
+      }
+    });
+    
+    // Limpiar localStorage de productos que ya no están reservados en Firebase
+    productos.forEach(producto => {
+      const enLocalStorage = localStorage.getItem(producto.id) === 'reservado';
+      const enFirebase = productosFirebase.has(producto.id);
+      
+      // Si está en localStorage pero NO en Firebase, limpiar
+      if (enLocalStorage && !enFirebase) {
+        console.log(`🧹 Limpiando localStorage para ${producto.id}`);
+        localStorage.removeItem(producto.id);
+        localStorage.removeItem(producto.id + '_code');
+        localStorage.removeItem(producto.id + '_datos');
+      }
+      
+      // Si está en Firebase pero NO en localStorage, actualizar localStorage
+      if (enFirebase && !enLocalStorage) {
+        console.log(`📝 Actualizando localStorage para ${producto.id}`);
+        localStorage.setItem(producto.id, 'reservado');
+      }
+    });
+    
+    console.log('✅ Sincronización completada');
+    
+  } catch (error) {
+    console.error('❌ Error en sincronización:', error);
+  }
+}
 // 🔥 FUNCIÓN ACTUALIZADA PARA CARGAR ESTADOS EN LOTE
 async function cargarEstadosProductos(productosACargar) {
   try {
@@ -1511,22 +1546,25 @@ async function cargarListaProductos() {
   }
 }
 
-// 🔥 FUNCIÓN MEJORADA PARA ELIMINAR RESERVA (ACTUALIZA VISTA)
+// 🔥 FUNCIÓN MEJORADA PARA ELIMINAR RESERVA (CON SINCRONIZACIÓN GLOBAL)
 async function eliminarReserva(idReserva, idProducto) {
   if (confirm('¿Estás seguro de que quieres eliminar esta reserva?')) {
     try {
       await db.collection("reservas").doc(idReserva).delete();
       
-      // 🔥 ACTUALIZAR INMEDIATAMENTE LA VISTA PRINCIPAL
+      // 🔥 FORZAR SINCRONIZACIÓN INMEDIATA
+      await sincronizarLocalStorageConFirebase();
+      
+      // 🔥 ACTUALIZAR VISTAS
       await actualizarEstadoProducto(idProducto);
       
-      alert(' Reserva eliminada correctamente');
+      alert('✅ Reserva eliminada correctamente');
       await cargarReservasActivas();
       await cargarListaProductos();
       
     } catch (error) {
       console.error('Error eliminando reserva:', error);
-      alert(' Error eliminando reserva');
+      alert('❌ Error eliminando reserva');
     }
   }
 }
@@ -1642,9 +1680,9 @@ async function reservarProductoAdmin(idProducto) {
   }
 }
 
-// 🔥 LIMPIAR TODAS LAS RESERVAS
+// 🔥 FUNCIÓN MEJORADA PARA LIMPIAR TODAS LAS RESERVAS
 async function limpiarTodasLasReservas() {
-  if (confirm(' ¿ESTÁS SEGURO?\n\nEsta acción eliminará TODAS las reservas de la base de datos y no se puede deshacer.')) {
+  if (confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsta acción eliminará TODAS las reservas de la base de datos y no se puede deshacer.')) {
     try {
       const snapshot = await db.collection("reservas").get();
       const batch = db.batch();
@@ -1653,20 +1691,23 @@ async function limpiarTodasLasReservas() {
       });
       await batch.commit();
       
-      // Limpiar localStorage también
+      // 🔥 LIMPIAR COMPLETAMENTE EL LOCALSTORAGE
       productos.forEach(p => {
         localStorage.removeItem(p.id);
         localStorage.removeItem(p.id + '_code');
         localStorage.removeItem(p.id + '_datos');
       });
       
-      alert(' Todas las reservas han sido eliminadas');
+      // 🔥 FORZAR RECARGA COMPLETA
       await cargarReservasActivas();
       await cargarListaProductos();
-      cargarProductosConEstado(); // Actualizar vista principal
+      await cargarProductosConEstado();
+      
+      alert('✅ Todas las reservas han sido eliminadas');
+      
     } catch (error) {
       console.error('Error limpiando reservas:', error);
-      alert(' Error limpiando reservas');
+      alert('❌ Error limpiando reservas');
     }
   }
 }
@@ -1701,7 +1742,7 @@ function injectarEstilosAdicionales() {
 }
 // 🔥 INICIALIZACIÓN MEJORADA
 document.addEventListener('DOMContentLoaded', function() {
-  console.log(" Inicializando aplicación...");
+  console.log("🚀 Inicializando aplicación...");
   
   // Inyectar estilos adicionales
   injectarEstilosAdicionales();
@@ -1719,5 +1760,10 @@ document.addEventListener('DOMContentLoaded', function() {
     adminBtn.addEventListener('click', toggleModoAdministrador);
   }
   
-  console.log(" Aplicación inicializada correctamente");
+  // 🔥 SINCRONIZAR AL INICIAR LA APLICACIÓN
+  setTimeout(async () => {
+    await sincronizarLocalStorageConFirebase();
+  }, 500);
+  
+  console.log("✅ Aplicación inicializada correctamente");
 });
