@@ -3,7 +3,7 @@ const EMAILJS_PUBLIC_KEY = 'VaZolVLIPNhPpRJwq'; // Clable pública
 const EMAILJS_SERVICE_ID = 'service_ui8gyzj'; // Cave del servicio
 const EMAILJS_TEMPLATE_ID = 'template_h759ldq'; // Clave de la plantilla
 // Contraseña de administrador
-const ADMIN_PASSWORD = 'admin123';
+const ADMIN_PASSWORD = 'Alt!plan02025';
 
 // CONFIGURACIÓN FIREBASE v8
 /*
